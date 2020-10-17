@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  reactor-monitor
+Transform: 'AWS::Serverless-2016-10-31'
+Resources:
+  KinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:    
+      Name: indications-stream
+      ShardCount: 1
+  IndicationsDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: indications-table
+      AttributeDefinitions:
+        - AttributeName: recordId
+          AttributeType: S
+        - AttributeName: temp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: recordId
+          KeyType: HASH
+        - AttributeName: temp
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: reactor-notifications
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: ashkan.farivarmoheb@gmail.com
+      Protocol: email
+      TopicArn: !Ref NotificationsTopic
+  ProcessIndicationsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/processIndications.handler
+      CodeUri: s3://838811465072-serverless/2c90f27fe2a16a1db6d8447e94b509ec
+      Runtime: nodejs10.x
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          NOTIFICATIONS_TOPIC_ARN: !Ref NotificationsTopic
+      Events:
+        Stream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt KinesisStream.Arn
+            StartingPosition: LATEST
+            BatchSize: 1
+      Policies:
+        - AmazonDynamoDBFullAccess
+        - AmazonSNSFullAccess
+      
